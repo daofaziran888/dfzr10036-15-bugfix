@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.base import BaseModuleService
+from app.services.compaction import CompactionService
 from app.store import store
 
 
@@ -29,30 +30,18 @@ class IcebergCommitService(BaseModuleService):
         table = str(entry.get("目标表", "unknown"))
         results: dict[str, Any] = {"compaction": None, "expire_snap": None}
 
-        # 检查文件数，触发 compaction
+        # 检查文件数，触发 compaction（经确认清单生成的合并任务，避免裸“已完成”）
+        comp_service = CompactionService()
         comp_rows = store.rows("compaction")
         existing_comp = [r for r in comp_rows if str(r.get("目标表", "")) == table]
         if not existing_comp:
-            new_comp_id = max((int(r.get("id", 0)) for r in comp_rows), default=0) + 1
-            comp = {
-                "id": new_comp_id,
-                "任务编号": f"COMP-{new_comp_id:04d}",
-                "目标表": table,
-                "文件数量": 42,
-                "合并策略": "BinPack-128MB",
-                "触发阈值": "文件数 >= 30",
-                "执行内存": "1GB",
-                "合并耗时": "12.5s",
-                "释放空间": "450MB",
-                "status": "已完成",
-                "pending": False,
-                "abnormal": False,
-            }
-            comp_rows.append(comp)
+            comp = comp_service.build_completed_compaction(table)
             results["compaction"] = comp
         else:
-            existing_comp[0]["文件数量"] += 1
-            results["compaction"] = existing_comp[0]
+            # 同表已有合并任务时直接接续，不篡改文件数量，保持文件计划与确认清单一致
+            existing = existing_comp[0]
+            comp_service.ensure_file_plan(existing)
+            results["compaction"] = existing
 
         # 触发 expire_snap
         exp_rows = store.rows("expire_snap")

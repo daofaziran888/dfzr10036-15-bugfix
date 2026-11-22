@@ -35,11 +35,11 @@ class SinkWriterService(BaseModuleService):
             "数据文件": f"s3://warehouse/data/{entry.get('管道编号', 'default')}/part-00001.parquet",
             "清单文件": f"metadata/manifest-{new_id}.avro",
             "快照ID": f"{new_id * 1000 + 500}",
-            "提交状态": "待提交",
+            "提交状态": "COMMITTED",
             "影响行数": 128340,
             "提交时间": "2026-11-18 10:32:45",
-            "status": "提交中",
-            "pending": True,
+            "status": "已提交",
+            "pending": False,
             "abnormal": False,
         }
         commit_rows.append(commit)
@@ -54,21 +54,8 @@ class SinkWriterService(BaseModuleService):
         if entry is None or entry.get("status") != "写入阻塞":
             return None
 
-        comp_rows = store.rows("compaction")
-        new_id = max((int(r.get("id", 0)) for r in comp_rows), default=0) + 1
-        comp = {
-            "id": new_id,
-            "任务编号": f"COMP-{new_id:04d}",
-            "目标表": str(entry.get("目标载体", "unknown")),
-            "文件数量": 85,
-            "合并策略": "BinPack-按大小合并",
-            "触发阈值": "文件数 >= 50",
-            "执行内存": "2GB",
-            "合并耗时": "未执行",
-            "释放空间": "未执行",
-            "status": "合并中",
-            "pending": True,
-            "abnormal": False,
-        }
-        comp_rows.append(comp)
-        return comp
+        from app.services.compaction import CompactionService
+        # 经领域服务创建：自动携带文件计划，后续按确认清单推进
+        return CompactionService().build_running_compaction(
+            str(entry.get("目标载体", "unknown")), 85
+        )

@@ -233,6 +233,57 @@ def flow_sink_block_to_compaction(sink_entry_id: int) -> dict[str, Any]:
     return {"ok": True, "trace": trace, "call_count": len(trace)}
 
 
+def flow_lakehouse_maintenance(compaction_entry_id: int) -> dict[str, Any]:
+    """接续链路: 小文件合并工作台 -> 湖仓维护（快照过期预演 + 流聚合同步）。
+
+    值班员取消合并后，本入口必须以“合并数据文件确认清单”为唯一依据：
+    - 已取消/未确认任务只做跳过说明，预演不列出未确认文件、聚合不更新计数；
+    - 预演实际列出的路径全部来自确认清单里的替换依据；
+    - 只有确认的替换结果才能进入统计或续做。
+    """
+    result = compaction.trigger_expire_and_metric(compaction_entry_id)
+    if result is None:
+        return {
+            "ok": False,
+            "step": "compaction",
+            "message": f"合并任务 {compaction_entry_id} 不存在或已归档",
+        }
+
+    trace: list[str] = []
+    if result.get("skipped"):
+        return {
+            "ok": True,
+            "trace": trace,
+            "call_count": 0,
+            "skipped": True,
+            "reason": result.get("reason", ""),
+            "compaction_id": compaction_entry_id,
+            "preview_paths": result.get("preview_paths", []),
+            "confirmed_manifest": result.get("confirmed_manifest", []),
+        }
+
+    if result.get("expire_snap"):
+        trace.append(
+            f"compaction#{compaction_entry_id} -> expire_snap#{result['expire_snap']['id']}"
+        )
+    if result.get("metric_aggr"):
+        trace.append(
+            f"compaction#{compaction_entry_id} -> metric_aggr#{result['metric_aggr']['id']}"
+        )
+
+    return {
+        "ok": True,
+        "trace": trace,
+        "call_count": len(trace),
+        "skipped": False,
+        "compaction_id": compaction_entry_id,
+        "preview_paths": result.get("preview_paths", []),
+        "confirmed_manifest": result.get("confirmed_manifest", []),
+        "expire_snap": result.get("expire_snap"),
+        "metric_aggr": result.get("metric_aggr"),
+    }
+
+
 # 注册所有可编排的流链路
 FLOWS: dict[str, Any] = {
     "cdc_to_lake": flow_cdc_to_lake,
@@ -243,4 +294,5 @@ FLOWS: dict[str, Any] = {
     "out_of_order_to_checkpoint": flow_out_of_order_to_checkpoint,
     "rate_propagation": flow_rate_propagation,
     "sink_block_to_compaction": flow_sink_block_to_compaction,
+    "lakehouse_maintenance": flow_lakehouse_maintenance,
 }

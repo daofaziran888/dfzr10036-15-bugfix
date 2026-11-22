@@ -21,6 +21,14 @@ def require_service(module: str):
     return service
 
 
+# 固定路径必须先于动态 GET /{module} 注册，否则会被模块列表路由抢先匹配。
+@router.get("/flows/list")
+def list_flows() -> dict[str, Any]:
+    """列出所有可编排流链路（含湖仓维护接续入口）。"""
+    from app.services.orchestrator import FLOWS
+    return {"flows": list(FLOWS.keys()), "count": len(FLOWS)}
+
+
 @router.get("/{module}", response_model=PageResult[dict])
 def list_entries(
     module: str,
@@ -156,8 +164,8 @@ def trigger_flow_sink_block_to_compaction(sink_entry_id: int) -> dict[str, Any]:
     return flow_sink_block_to_compaction(sink_entry_id)
 
 
-@router.get("/flows/list")
-def list_flows() -> dict[str, Any]:
-    """列出所有可编排流链路"""
-    from app.services.orchestrator import FLOWS
-    return {"flows": list(FLOWS.keys()), "count": len(FLOWS)}
+@router.post("/flows/lakehouse-maintenance")
+def trigger_flow_lakehouse_maintenance(compaction_entry_id: int) -> dict[str, Any]:
+    """接续链路: 小文件合并（确认清单） -> 快照过期预演 + 流聚合计数同步"""
+    from app.services.orchestrator import flow_lakehouse_maintenance
+    return flow_lakehouse_maintenance(compaction_entry_id)

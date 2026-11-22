@@ -202,16 +202,104 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
         {
             "id": 1, "status": "已完成", "pending": False, "abnormal": False,
             "任务编号": "CMP-0001", "目标表": "ads.order_events_iceberg",
-            "文件数量": 42, "合并策略": "BinPack-128MB",
+            "文件数量": 4, "合并策略": "BinPack-128MB",
             "触发阈值": "文件数>=30触发", "执行内存": "2GB",
             "合并耗时": "12.5s", "释放空间": "450MB",
+            "文件确认状态": "全部确认",
+            "原始输入文件": [
+                "s3://warehouse/ads/order_events_iceberg/data/input/part-00001.parquet",
+                "s3://warehouse/ads/order_events_iceberg/data/input/part-00002.parquet",
+                "s3://warehouse/ads/order_events_iceberg/data/input/part-00003.parquet",
+                "s3://warehouse/ads/order_events_iceberg/data/input/part-00004.parquet",
+            ],
+            "替换文件计划": [
+                {
+                    "替换文件": "s3://warehouse/ads/order_events_iceberg/data/compact/merged-part-00001.parquet",
+                    "替换依据": [
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00001.parquet",
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00002.parquet",
+                    ],
+                    "已落地": True, "已确认": True,
+                },
+                {
+                    "替换文件": "s3://warehouse/ads/order_events_iceberg/data/compact/merged-part-00002.parquet",
+                    "替换依据": [
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00003.parquet",
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00004.parquet",
+                    ],
+                    "已落地": True, "已确认": True,
+                },
+            ],
+            "合并数据文件确认清单": [
+                {
+                    "替换文件": "s3://warehouse/ads/order_events_iceberg/data/compact/merged-part-00001.parquet",
+                    "替换依据": [
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00001.parquet",
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00002.parquet",
+                    ],
+                    "确认时间": "2026-11-18 10:40:00",
+                },
+                {
+                    "替换文件": "s3://warehouse/ads/order_events_iceberg/data/compact/merged-part-00002.parquet",
+                    "替换依据": [
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00003.parquet",
+                        "s3://warehouse/ads/order_events_iceberg/data/input/part-00004.parquet",
+                    ],
+                    "确认时间": "2026-11-18 10:40:00",
+                },
+            ],
         },
         {
+            # 尚未写出任何替换文件的合并中任务：取消后不得进入过期预演与统计
             "id": 2, "status": "合并中", "pending": True, "abnormal": False,
             "任务编号": "CMP-0002", "目标表": "ods.payment_log_iceberg",
             "文件数量": 95, "合并策略": "Sort-Merge-按txn_date",
             "触发阈值": "文件数>=50触发", "执行内存": "4GB",
             "合并耗时": "进行中...", "释放空间": "预估1.2GB",
+        },
+        {
+            # 并发撞单演示：存储已开始确认一组替换文件，值班员同时请求取消
+            "id": 3, "status": "合并中", "pending": True, "abnormal": False,
+            "任务编号": "CMP-0003", "目标表": "dwd.trade_detail_iceberg",
+            "文件数量": 4, "合并策略": "BinPack-256MB",
+            "触发阈值": "文件数>=10触发", "执行内存": "4GB",
+            "合并耗时": "进行中...", "释放空间": "预估680MB",
+            "文件确认状态": "部分确认(1)",
+            "原始输入文件": [
+                "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00001.parquet",
+                "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00002.parquet",
+                "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00003.parquet",
+                "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00004.parquet",
+            ],
+            "替换文件计划": [
+                {
+                    "替换文件": "s3://warehouse/dwd/trade_detail_iceberg/data/compact/merged-part-00001.parquet",
+                    "替换依据": [
+                        "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00001.parquet",
+                        "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00002.parquet",
+                    ],
+                    "已落地": True, "已确认": True,
+                },
+                {
+                    # 已落地但尚未确认：取消后保留路径，但不取得清理资格
+                    "替换文件": "s3://warehouse/dwd/trade_detail_iceberg/data/compact/merged-part-00002.parquet",
+                    "替换依据": [
+                        "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00003.parquet",
+                        "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00004.parquet",
+                    ],
+                    "已落地": True, "已确认": False,
+                },
+            ],
+            "合并数据文件确认清单": [
+                {
+                    "替换文件": "s3://warehouse/dwd/trade_detail_iceberg/data/compact/merged-part-00001.parquet",
+                    "替换依据": [
+                        "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00001.parquet",
+                        "s3://warehouse/dwd/trade_detail_iceberg/data/input/part-00002.parquet",
+                    ],
+                    "确认时间": "2026-11-18 10:48:00",
+                },
+            ],
         },
     ],
     "ddl_handle": [
@@ -313,8 +401,29 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
             "保留数量": 10, "保留天数": "7天",
             "清理模式": "按快照创建时间过期+保留最新N个",
             "预演结果": "待清理23个历史快照",
+            "预演清理路径": [],
             "下次执行": "2026-11-19 02:00:00",
             "上次清理": "2026-11-18 02:00:00",
+        },
+        {
+            "id": 2, "status": "生效中", "pending": True, "abnormal": False,
+            "策略编号": "XPI-0002", "目标表": "ods.payment_log_iceberg",
+            "保留数量": 8, "保留天数": "5天",
+            "清理模式": "按快照创建时间过期+保留最新N个",
+            "预演结果": "等待合并确认清单提供清理范围",
+            "预演清理路径": [],
+            "下次执行": "2026-11-19 02:00:00",
+            "上次清理": "2026-11-17 02:00:00",
+        },
+        {
+            "id": 3, "status": "生效中", "pending": True, "abnormal": False,
+            "策略编号": "XPI-0003", "目标表": "dwd.trade_detail_iceberg",
+            "保留数量": 6, "保留天数": "5天",
+            "清理模式": "按快照创建时间过期+保留最新N个",
+            "预演结果": "等待合并确认清单提供清理范围",
+            "预演清理路径": [],
+            "下次执行": "2026-11-19 02:00:00",
+            "上次清理": "2026-11-17 02:00:00",
         },
     ],
     "task_schedule": [
